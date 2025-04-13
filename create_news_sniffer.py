@@ -71,10 +71,10 @@ if __name__ == "__main__":
     assistant = client.beta.assistants.create(
         name="NewsSniffer",
         instructions=instructions,
-        tools=[
-            {"type": "code_interpreter"},
-            {"type": "browser"}
-        ],
+    tools=[
+        {"type": "code_interpreter"}
+    ],
+
         model="gpt-4-1106-preview"
     )
 
