@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+import re
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -53,20 +54,22 @@ def build_prompt(query, results):
         )
 
     prompt += (
-        "\nActivate your macro-financial news scanning capabilities. "
-        "Your task is to identify and summarize the most important recent developments across global markets, "
-        "monetary policy, credit conditions, volatility, and systemic risk. Focus on news that could materially shift the market’s risk environment. "
-        "Return a list of structured JSON objects with the following fields:\n\n"
-        "- headline: Title of the article or news item\n"
-        "- source: Publisher or analyst name\n"
+        "\nYou are a macro-financial news analysis agent supporting a market risk intelligence system. "
+        "You will receive a list of news articles pulled from a Google News API search. Your job is to analyze each article's content "
+        "to determine its potential impact on financial markets, particularly regarding systemic stress, liquidity, credit spreads, volatility, "
+        "rates, inflation, unemployment, macro indicators, and flight-to-safety behavior.\n\n"
+        "For each article, return a structured JSON object containing the following fields:\n"
+        "- headline: The article title\n"
+        "- source: The news outlet or publication\n"
         "- url: Direct link to the article\n"
-        "- timestamp: Date and time of publication (if available, UTC preferred)\n"
-        "- summary: 1–3 concise bullet points explaining the significance\n"
-        "- category: One or more tags relevant to Bottom Sniffer components (e.g., 'Rates & Curve', 'Credit & Volatility', 'Macro Indicators', 'Flight to Safety')\n"
-        "- sentiment: Market signal ('Risk-On', 'Neutral', or 'Risk-Off') based on the article's implications\n\n"
-        "Only return content that impacts the risk assessment framework, market stress indicators, or trading posture. "
-        "Filter out low-signal items and focus on actionable macro and systemic developments."
+        "- timestamp: Date/time of publication (if available)\n"
+        "- summary: 1–3 short bullet points highlighting the market-relevant insights\n"
+        "- category: One or more relevant tags such as 'Rates & Curve', 'Credit & Volatility', 'Macro Indicators', 'Flight to Safety', 'Policy', or 'Geopolitics'\n"
+        "- sentiment: One of ['Risk-On', 'Neutral', 'Risk-Off'], based on the tone and market implications\n\n"
+        "Focus only on macro-relevant or market-moving insights. Ignore fluff, human interest, or irrelevant items. "
+        "You are not summarizing for general interest — you are generating inputs for a market bottom detection system."
     )
+
 
     return prompt
 
@@ -102,13 +105,19 @@ def run_news_sniffer(query):
         print("\n🧠 NewsSniffer Output:\n")
         print(response)
 
+        # Attempt to extract valid JSON from assistant response
         try:
-            parsed = json.loads(response)
-            with open("sniffer_output.json", "w") as f:
-                json.dump(parsed, f, indent=2)
-            print("\n✅ Output saved to sniffer_output.json")
-        except json.JSONDecodeError:
-            print("\n⚠️ Could not parse output as JSON. Manual review required.")
+            match = re.search(r"```json(.*?)```", response, re.DOTALL)
+            if match:
+                json_str = match.group(1).strip()
+                parsed = json.loads(json_str)
+                with open("sniffer_output.json", "w") as f:
+                    json.dump(parsed, f, indent=2)
+                print("\n✅ Output saved to sniffer_output.json")
+            else:
+                raise ValueError("No JSON block found in response.")
+        except Exception as e:
+            print(f"\n⚠️ Could not parse output as JSON. Reason: {e}")
             with open("sniffer_output_raw.txt", "w") as f:
                 f.write(response)
             print("📝 Raw response saved to sniffer_output_raw.txt")
